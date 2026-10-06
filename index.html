@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Neon Beat - 霓虹節奏</title>
+  <style>
+    :root {
+      --bg-color: #0b0d19;
+      --lane-bg: rgba(20, 24, 45, 0.7);
+      --lane-border: rgba(0, 240, 255, 0.2);
+      --hit-line-color: #00f0ff;
+      --note-color: #ff007f;
+      --text-main: #f0f4fc;
+      --accent-cyan: #00f0ff;
+      --accent-pink: #ff007f;
+      --accent-yellow: #ffe600;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 遊戲主容器 */
+    #game-wrapper {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+      height: 92vh;
+      max-height: 780px;
+      background: radial-gradient(circle at 50% 30%, #151a30 0%, #080a12 100%);
+      border: 1px solid rgba(0, 240, 255, 0.3);
+      border-radius: 12px;
+      box-shadow: 0 0 24px rgba(0, 240, 255, 0.15);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 頂部 HUD */
+    .hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 18px;
+      background: rgba(0, 0, 0, 0.35);
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      z-index: 10;
+    }
+
+    .hud-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .hud-label {
+      font-size: 11px;
+      color: #7f8ca3;
+      letter-spacing: 1px;
+    }
+
+    .hud-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    /* 軌道畫布區域 */
+    #canvas-container {
+      position: relative;
+      flex: 1;
+      width: 100%;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* 浮動判定與 Combo 提示 */
+    #judgment-popup {
+      position: absolute;
+      top: 55%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      pointer-events: none;
+      opacity: 0;
+      transition: transform 0.12s ease-out, opacity 0.2s ease-out;
+      text-shadow: 0 0 10px currentColor;
+      z-index: 20;
+    }
+
+    #combo-display {
+      position: absolute;
+      top: 45%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      pointer-events: none;
+      z-index: 19;
+    }
+
+    #combo-count {
+      font-size: 38px;
+      font-weight: 900;
+      color: #fff;
+      text-shadow: 0 0 12px var(--accent-pink);
+    }
+
+    #combo-title {
+      font-size: 12px;
+      letter-spacing: 3px;
+      color: var(--accent-pink);
+    }
+
+    /* 底部按鍵區 (支援觸控點擊) */
+    .controls-bar {
+      display: flex;
+      height: 70px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(8, 10, 18, 0.85);
+      z-index: 10;
+    }
+
+    .key-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      background: transparent;
+      color: #a0aec0;
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: background 0.08s, color 0.08s;
+    }
+
+    .key-btn:last-child {
+      border-right: none;
+    }
+
+    .key-btn.active {
+      background: rgba(0, 240, 255, 0.25);
+      color: #ffffff;
+      box-shadow: inset 0 0 12px var(--accent-cyan);
+    }
+
+    .key-char {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    /* 彈跳遮罩層 (開始與結算畫面) */
+    .modal {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 10, 20, 0.94);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 100;
+      text-align: center;
+    }
+
+    .modal.hidden {
+      display: none;
+    }
+
+    .modal h1 {
+      font-size: 30px;
+      color: var(--accent-cyan);
+      margin-bottom: 8px;
+      text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+    }
+
+    .modal p {
+      font-size: 13px;
+      color: #8c9bb5;
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+
+    .stats-table {
+      width: 100%;
+      margin: 16px 0;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+
+    .rank-badge {
+      font-size: 54px;
+      font-weight: 900;
+      margin: 10px 0;
+      color: var(--accent-yellow);
+      text-shadow: 0 0 20px rgba(255, 230, 0, 0.6);
+    }
+
+    .primary-btn {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      border: none;
+      padding: 12px 32px;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.4);
+      transition: transform 0.1s;
+    }
+
+    .primary-btn:active {
+      transform: scale(0.96);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="game-wrapper">
+    <!-- 頂部資訊列 -->
+    <div class="hud">
+      <div class="hud-item">
+        <span class="hud-label">SCORE</span>
+        <span id="score-text" class="hud-value">0</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">ACCURACY</span>
+        <span id="accuracy-text" class="hud-value">100%</span>
+      </div>
+      <div class="hud-item">
+        <span class="hud-label">TIME</span>
+        <span id="time-text" class="hud-value">0s</span>
+      </div>
+    </div>
+
+    <!-- 落下繪製區 -->
+    <div id="canvas-container">
+      <canvas id="game-canvas"></canvas>
+
+      <div id="combo-display">
+        <div id="combo-count">0</div>
+        <div id="combo-title">COMBO</div>
+      </div>
+
+      <div id="judgment-popup">PERFECT</div>
+    </div>
+
+    <!-- 底部控制鍵 -->
+    <div class="controls-bar">
+      <button class="key-btn" data-lane="0"><span class="key-char">D</span></button>
+      <button class="key-btn" data-lane="1"><span class="key-char">F</span></button>
+      <button class="key-btn" data-lane="2"><span class="key-char">J</span></button>
+      <button class="key-btn" data-lane="3"><span class="key-char">K</span></button>
+    </div>
+
+    <!-- 遊戲開始面板 -->
+    <div id="start-modal" class="modal">
+      <h1>NEON BEAT</h1>
+      <p>請依節奏在音符到達判定線時按下對應鍵<br><b>鍵盤：D / F / J / K</b> 或直接點擊下方按鍵</p>
+      <div style="margin-bottom: 20px; font-size: 12px; color: #a0aec0;">
+        歷史最高分：<span id="high-score-preview" style="color: var(--accent-cyan); font-weight: bold;">0</span>
+      </div>
+      <button id="start-btn" class="primary-btn">開始遊戲</button>
+    </div>
+
+    <!-- 結算面板 -->
+    <div id="result-modal" class="modal hidden">
+      <h1>STAGE CLEAR</h1>
+      <div id="rank-text" class="rank-badge">S</div>
+      <div class="stats-table">
+        <div class="stats-row"><span>總得分</span><b id="final-score">0</b></div>
+        <div class="stats-row"><span>最高連擊 (Max Combo)</span><b id="final-combo">0</b></div>
+        <div class="stats-row"><span>打擊準確率</span><b id="final-acc">0%</b></div>
+        <div class="stats-row" style="color: var(--accent-cyan)"><span>Perfect</span><b id="final-perfect">0</b></div>
+        <div class="stats-row" style="color: var(--accent-yellow)"><span>Good</span><b id="final-good">0</b></div>
+        <div class="stats-row" style="color: #8c9bb5"><span>Miss</span><b id="final-miss">0</b></div>
+      </div>
+      <button id="restart-btn" class="primary-btn">再玩一次</button>
+    </div>
+  </div>
+
+  <script>
+    /* ========================================================
+       1. 音訊系統 (Web Audio API 合成器)
+       ======================================================== */
+    let audioCtx = null;
+
+    function initAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    // 合成大鼓 (Kick)
+    function playKick(time) {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+
+      osc.frequency.setValueAtTime(140, time);
+      osc.frequency.exponentialRampToValueAtTime(0.01, time + 0.22);
+      gain.gain.setValueAtTime(0.9, time);
+      gain.gain.exponentialRampToValueAtTime(0.01, time + 0.22);
+
+      osc.start(time);
+      osc.stop(time + 0.22);
+    }
+
+    // 合成小鼓 (Snare)
+    function playSnare(time) {
+      if (!audioCtx) return;
+      // 噪音部分
+      const bufferSize = audioCtx.sampleRate * 0.15;
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.value = 800;
+
+      const noiseGain = audioCtx.createGain();
+      noiseGain.gain.setValueAtTime(0.5, time);
+      noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(audioCtx.destination);
+
+      noise.start(time);
+      noise.stop(time + 0.15);
+    }
+
+    // 打擊按鍵音 (Hit Beep)
+    function playHitSound() {
+      if (!audioCtx) return;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.05);
+
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.05);
+    }
+
+    /* ========================================================
+       2. 譜面生成與遊戲狀態
+       ======================================================== */
+    const BPM = 128;
+    const BEAT_DURATION = 60 / BPM; // 秒/拍 ~ 0.46875s
+    const TOTAL_BARS = 18;          // 約 34 秒
+    const FALL_TIME = 1.6;          // 音符從頂部落到判定線所需秒數
+
+    let notes = [];
+    let isPlaying = false;
+    let songStartTime = 0;
+    let currentScore = 0;
+    let currentCombo = 0;
+    let maxCombo = 0;
+    let hitsCount = { perfect: 0, good: 0, miss: 0 };
+
+    // 自動生成譜面結構
+    function generateChart() {
+      notes = [];
+      const totalBeats = TOTAL_BARS * 4;
+      for (let beat = 4; beat < totalBeats - 2; beat++) {
+        const time = beat * BEAT_DURATION;
+        
+        // 依據拍子安排落點
+        if (beat % 2 === 0) {
+          notes.push({ lane: (beat / 2) % 4, time: time, hit: false, missed: false });
+        } else if (beat % 3 === 0) {
+          notes.push({ lane: (beat * 3) % 4, time: time, hit: false, missed: false });
+        } else if (beat % 7 === 0) {
+          notes.push({ lane: 1, time: time, hit: false, missed: false });
+          notes.push({ lane: 2, time: time, hit: false, missed: false });
+        }
+      }
+    }
+
+    /* ========================================================
+       3. 畫布渲染引擎
+       ======================================================== */
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    let canvasWidth = 0;
+    let canvasHeight = 0;
+    const laneActiveTime = [0, 0, 0, 0];
+
+    function resizeCanvas() {
+      const container = document.getElementById('canvas-container');
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      canvasWidth = canvas.width;
+      canvasHeight = canvas.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function render(timestamp) {
+      if (!isPlaying) return;
+
+      const currentTime = (audioCtx ? audioCtx.currentTime : performance.now() / 1000) - songStartTime;
+      const remainingTime = Math.max(0, (TOTAL_BARS * 4 * BEAT_DURATION) - currentTime);
+      document.getElementById('time-text').textContent = `${Math.ceil(remainingTime)}s`;
+
+      // 1. 清空畫布
+      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+      const laneWidth = canvasWidth / 4;
+      const hitLineY = canvasHeight - 80;
+
+      // 2. 繪製 4 條軌道背景與壓鍵光暈
+      for (let i = 0; i < 4; i++) {
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.12)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(i * laneWidth, 0, laneWidth, canvasHeight);
+
+        // 按鍵按下高亮
+        if (performance.now() - laneActiveTime[i] < 120) {
+          const grad = ctx.createLinearGradient(0, hitLineY, 0, hitLineY - 120);
+          grad.addColorStop(0, 'rgba(0, 240, 255, 0.35)');
+          grad.addColorStop(1, 'rgba(0, 240, 255, 0)');
+          ctx.fillStyle = grad;
+          ctx.fillRect(i * laneWidth, 0, laneWidth, hitLineY);
+        }
+      }
+
+      // 3. 繪製判定基準線
+      ctx.beginPath();
+      ctx.moveTo(0, hitLineY);
+      ctx.lineTo(canvasWidth, hitLineY);
+      ctx.strokeStyle = '#00f0ff';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#00f0ff';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.shadowBlur = 0; // 重設 shadow
+
+      // 4. 繪製落下的音符 (Notes)
+      notes.forEach(note => {
+        if (note.hit || note.missed) return;
+
+        const timeDiff = note.time - currentTime;
+
+        // 計算音符 Y 軸位置
+        const progress = 1 - (timeDiff / FALL_TIME);
+        const y = progress * hitLineY;
+
+        // 判定超時判定 (超出判定線 140ms 即為 Miss)
+        if (timeDiff < -0.14) {
+          note.missed = true;
+          handleJudgment('MISS');
+          return;
+        }
+
+        // 進入視窗內即繪製
+        if (y > -20 && y <= canvasHeight) {
+          const x = note.lane * laneWidth + 6;
+          const w = laneWidth - 12;
+          const h = 18;
+
+          ctx.fillStyle = '#ff007f';
+          ctx.shadowColor = '#ff007f';
+          ctx.shadowBlur = 12;
+
+          // 圓角矩形音符
+          ctx.beginPath();
+          ctx.roundRect(x, y - h / 2, w, h, 6);
+          ctx.fill();
+
+          // 內部光亮核心
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.roundRect(x + 4, y - h / 2 + 3, w - 8, 4, 2);
+          ctx.fill();
+
+          ctx.shadowBlur = 0;
+        }
+      });
+
+      // 檢查是否結束
+      if (currentTime > (TOTAL_BARS * 4 * BEAT_DURATION) + 1.2) {
+        finishGame();
+        return;
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    /* ========================================================
+       4. 判定與打擊處理
+       ======================================================== */
+    const judgmentEl = document.getElementById('judgment-popup');
+    const comboCountEl = document.getElementById('combo-count');
+    const scoreTextEl = document.getElementById('score-text');
+    const accuracyTextEl = document.getElementById('accuracy-text');
+
+    function handleInput(laneIndex) {
+      if (!isPlaying) return;
+      playHitSound();
+      laneActiveTime[laneIndex] = performance.now();
+
+      const currentTime = (audioCtx ? audioCtx.currentTime : performance.now() / 1000) - songStartTime;
+
+      // 尋找該軌道上最靠近判定線且未敲擊的音符
+      let targetNote = null;
+      let minDiff = 999;
+
+      for (let note of notes) {
+        if (note.lane === laneIndex && !note.hit && !note.missed) {
+          const diff = Math.abs(note.time - currentTime);
+          if (diff < minDiff && diff < 0.22) {
+            minDiff = diff;
+            targetNote = note;
+          }
+        }
+      }
+
+      if (targetNote) {
+        targetNote.hit = true;
+        if (minDiff <= 0.055) {
+          handleJudgment('PERFECT');
+        } else if (minDiff <= 0.125) {
+          handleJudgment('GOOD');
+        } else {
+          handleJudgment('MISS');
+        }
+      }
+    }
+
+    function handleJudgment(type) {
+      judgmentEl.textContent = type;
+      judgmentEl.style.opacity = '1';
+      judgmentEl.style.transform = 'translate(-50%, -50%) scale(1.2)';
+
+      if (type === 'PERFECT') {
+        hitsCount.perfect++;
+        currentCombo++;
+        currentScore += 300 + Math.min(currentCombo * 5, 100);
+        judgmentEl.style.color = 'var(--accent-cyan)';
+      } else if (type === 'GOOD') {
+        hitsCount.good++;
+        currentCombo++;
+        currentScore += 100;
+        judgmentEl.style.color = 'var(--accent-yellow)';
+      } else {
+        hitsCount.miss++;
+        currentCombo = 0;
+        judgmentEl.style.color = '#8c9bb5';
+      }
+
+      if (currentCombo > maxCombo) maxCombo = currentCombo;
+
+      // 更新 HUD
+      comboCountEl.textContent = currentCombo;
+      scoreTextEl.textContent = currentScore;
+
+      const totalHandled = hitsCount.perfect + hitsCount.good + hitsCount.miss;
+      const acc = totalHandled === 0 ? 100 : Math.round(((hitsCount.perfect * 100) + (hitsCount.good * 50)) / totalHandled);
+      accuracyTextEl.textContent = `${acc}%`;
+
+      setTimeout(() => {
+        judgmentEl.style.opacity = '0';
+        judgmentEl.style.transform = 'translate(-50%, -50%) scale(1.0)';
+      }, 160);
+    }
+
+    /* ========================================================
+       5. 電子節奏音訊排程 (Audio Scheduler)
+       ======================================================== */
+    let scheduleTimer = null;
+
+    function startMusicScheduler() {
+      const scheduleAheadTime = 0.2;
+      let currentBeat = 0;
+      let nextBeatTime = audioCtx.currentTime;
+
+      function scheduler() {
+        while (nextBeatTime < audioCtx.currentTime + scheduleAheadTime && currentBeat < TOTAL_BARS * 4) {
+          // 4/4 拍：大鼓在第 0, 2 拍，小鼓在第 1, 3 拍
+          const beatInBar = currentBeat % 4;
+          if (beatInBar === 0 || beatInBar === 2) {
+            playKick(nextBeatTime);
+          } else {
+            playSnare(nextBeatTime);
+          }
+
+          nextBeatTime += BEAT_DURATION;
+          currentBeat++;
+        }
+
+        if (isPlaying && currentBeat < TOTAL_BARS * 4) {
+          scheduleTimer = setTimeout(scheduler, 50);
+        }
+      }
+      scheduler();
+    }
+
+    /* ========================================================
+       6. 遊戲流程控制
+       ======================================================== */
+    const startModal = document.getElementById('start-modal');
+    const resultModal = document.getElementById('result-modal');
+    const startBtn = document.getElementById('start-btn');
+    const restartBtn = document.getElementById('restart-btn');
+
+    // 讀取 LocalStorage 最高分
+    const savedHighScore = localStorage.getItem('neon_beat_highscore') || 0;
+    document.getElementById('high-score-preview').textContent = savedHighScore;
+
+    function startGame() {
+      initAudio();
+      startModal.classList.add('hidden');
+      resultModal.classList.add('hidden');
+
+      currentScore = 0;
+      currentCombo = 0;
+      maxCombo = 0;
+      hitsCount = { perfect: 0, good: 0, miss: 0 };
+      scoreTextEl.textContent = '0';
+      comboCountEl.textContent = '0';
+      accuracyTextEl.textContent = '100%';
+
+      generateChart();
+      resizeCanvas();
+
+      isPlaying = true;
+      songStartTime = audioCtx.currentTime;
+
+      startMusicScheduler();
+      requestAnimationFrame(render);
+    }
+
+    function finishGame() {
+      isPlaying = false;
+      clearTimeout(scheduleTimer);
+
+      const totalHandled = hitsCount.perfect + hitsCount.good + hitsCount.miss;
+      const acc = totalHandled === 0 ? 0 : Math.round(((hitsCount.perfect * 100) + (hitsCount.good * 50)) / totalHandled);
+
+      // 計算評級
+      let rank = 'F';
+      if (acc >= 95) rank = 'S';
+      else if (acc >= 85) rank = 'A';
+      else if (acc >= 75) rank = 'B';
+      else if (acc >= 60) rank = 'C';
+
+      // 儲存最高分
+      const prevHigh = parseInt(localStorage.getItem('neon_beat_highscore') || '0', 10);
+      if (currentScore > prevHigh) {
+        localStorage.setItem('neon_beat_highscore', currentScore);
+      }
+
+      // 填入結算資料
+      document.getElementById('rank-text').textContent = rank;
+      document.getElementById('final-score').textContent = currentScore;
+      document.getElementById('final-combo').textContent = maxCombo;
+      document.getElementById('final-acc').textContent = `${acc}%`;
+      document.getElementById('final-perfect').textContent = hitsCount.perfect;
+      document.getElementById('final-good').textContent = hitsCount.good;
+      document.getElementById('final-miss').textContent = hitsCount.miss;
+
+      resultModal.classList.remove('hidden');
+    }
+
+    startBtn.addEventListener('click', startGame);
+    restartBtn.addEventListener('click', startGame);
+
+    /* ========================================================
+       7. 鍵盤與觸控事件監聽
+       ======================================================== */
+    const keyMap = { 'd': 0, 'f': 1, 'j': 2, 'k': 3, 'D': 0, 'F': 1, 'J': 2, 'K': 3 };
+    const buttons = document.querySelectorAll('.key-btn');
+
+    window.addEventListener('keydown', (e) => {
+      if (keyMap.hasOwnProperty(e.key) && !e.repeat) {
+        const lane = keyMap[e.key];
+        buttons[lane]?.classList.add('active');
+        handleInput(lane);
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (keyMap.hasOwnProperty(e.key)) {
+        const lane = keyMap[e.key];
+        buttons[lane]?.classList.remove('active');
+      }
+    });
+
+    // 觸控點擊支援
+    buttons.forEach((btn, index) => {
+      const trigger = (e) => {
+        e.preventDefault();
+        btn.classList.add('active');
+        handleInput(index);
+        setTimeout(() => btn.classList.remove('active'), 100);
+      };
+      btn.addEventListener('touchstart', trigger, { passive: false });
+      btn.addEventListener('mousedown', trigger);
+    });
+  </script>
+</body>
+</html>
